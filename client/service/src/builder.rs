@@ -242,7 +242,7 @@ impl KeystoreContainer {
 
 /// Creates a new full client for the given config.
 pub fn new_full_client<TBl, TRtApi, TExecDisp>(
-	config: &Configuration,
+	config: &Configuration
 ) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
@@ -252,16 +252,18 @@ pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 
 /// Create the initial parts of a full node.
 pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
-	config: &Configuration,
+	config: &Configuration
 ) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
+    let ipfs_rt = tokio::runtime::Runtime::new().expect("couldn't start the IPFS runtime");
+
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.task_executor.clone(), ipfs_rt, registry)?
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -325,9 +327,10 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
+	let ipfs_rt = tokio::runtime::Runtime::new().expect("couldn't start the IPFS runtime");
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry)?
+		TaskManager::new(config.task_executor.clone(), ipfs_rt, registry)?
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -450,6 +453,7 @@ pub fn build_offchain_workers<TBl, TBackend, TCl>(
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	ipfs_rt: Arc<parking_lot::Mutex<tokio::runtime::Runtime>>,
 ) -> Option<Arc<sc_offchain::OffchainWorkers<TCl, TBackend::OffchainStorage, TBl>>>
 	where
 		TBl: BlockT, TBackend: sc_client_api::Backend<TBl>,
@@ -459,7 +463,7 @@ pub fn build_offchain_workers<TBl, TBackend, TCl>(
 {
 	let offchain_workers = match backend.offchain_storage() {
 		Some(db) => {
-			Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone(), db)))
+			Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone(), db, ipfs_rt)))
 		},
 		None => {
 			warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
