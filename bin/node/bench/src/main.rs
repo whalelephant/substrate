@@ -16,20 +16,27 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+mod common;
+mod construct;
 #[macro_use] mod core;
 mod import;
-mod trie;
-mod simple_trie;
 mod generator;
-mod tempdb;
+mod simple_trie;
 mod state_sizes;
+mod tempdb;
+mod trie;
 
-use crate::core::{run_benchmark, Mode as BenchmarkMode};
-use crate::tempdb::DatabaseType;
-use import::{ImportBenchmarkDescription, SizeType};
-use trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize};
-use node_testing::bench::{Profile, KeyTypes, BlockType, DatabaseType as BenchDataBaseType};
 use structopt::StructOpt;
+
+use node_testing::bench::{Profile, KeyTypes, BlockType, DatabaseType as BenchDataBaseType};
+
+use crate::{
+	common::SizeType,
+	core::{run_benchmark, Mode as BenchmarkMode},
+	tempdb::DatabaseType,
+	import::ImportBenchmarkDescription,
+	trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize},
+};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "node-bench", about = "Node integration benchmarks")]
