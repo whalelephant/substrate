@@ -693,8 +693,9 @@ impl<T: Trait> Module<T> {
 decl_event! {
 	pub enum Event<T>
 	where
-		<T as system::Trait>::AccountId,
-		<T as system::Trait>::Hash
+		Balance = BalanceOf<T>,
+		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Trait>::Hash
 	{
 		/// Contract deployed by address at the specified address.
 		Instantiated(AccountId, AccountId),
