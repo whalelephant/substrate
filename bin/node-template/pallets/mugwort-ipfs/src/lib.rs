@@ -27,10 +27,8 @@ pub struct ConjurationState<AccountId> {
 
 #[derive(Encode, Decode, PartialEq)]
 enum DataCommand {
-    AddBytes(ArtId, Vec<u8>),
+    AddBytes(u64, Vec<u8>),
 }
-
-type ArtId = u64;
 
 // This pallet's storage items.
 decl_storage! {
@@ -39,9 +37,9 @@ decl_storage! {
         // allowed.
         // OWAccountId get(fn ow_account_id) build(|config: &GenesisConfig<T>| config.ow_account_id.clone()) : <T as system::Trait>::AccountId;
         // Counter for Art work
-        CurrentArtId get(fn current_art_id): ArtId;
+        CurrentArtId get(fn current_art_id): u64;
         // A map for the conjured art states
-        Artwork get(fn art_work): map hasher(blake2_128_concat) ArtId => ConjurationState<<T as
+        Artwork get(fn art_work): map hasher(blake2_128_concat) u64 => ConjurationState<<T as
                                   system::Trait>::AccountId>;
         // A Queue to handle Ipfs data requests
         DataQueue: Vec<DataCommand>;
@@ -59,7 +57,7 @@ decl_event!(
         // Spell cast by Account
         SpellCast(AccountId),
         // Artwork conjured by Account, with id and metadata cid
-        Conjured(ArtId, Vec<u8>),
+        Conjured(u64, Vec<u8>),
     }
 );
 
@@ -106,7 +104,7 @@ decl_module! {
 
         /// Offchain worker returns the cid
         #[weight = 200_000]
-        fn transfigure_art(origin, id: ArtId, cid: Vec<u8>) {
+        fn transfigure_art(origin, id: u64, cid: Vec<u8>) {
             // WIP: Used for signed transactions
             //let who = ensure_signed(origin)?;
             //ensure!{
@@ -221,7 +219,7 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    fn transfigure_with_cid(id: ArtId, cid: Vec<u8>) -> Result<(), &'static str> {
+    fn transfigure_with_cid(id: u64, cid: Vec<u8>) -> Result<(), &'static str> {
         // WIP: Using unsigned transactions for now
         // let signer = Signer::<T, T::AuthorityId>::all_accounts();
         // if !signer.can_sign() {
@@ -245,6 +243,7 @@ impl<T: Trait> Module<T> {
         // }
 
         let call = Call::transfigure_art(id, cid);
+        //(offchain call) Error submitting a transaction to the pool: Pool(UnknownTransaction(UnknownTransaction::NoUnsignedValidator))
         SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
             .map_err(|()| "Unable to submit unsigned transaction.")?;
         Ok(())
