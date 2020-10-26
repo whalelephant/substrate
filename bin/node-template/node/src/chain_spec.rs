@@ -1,6 +1,6 @@
 use node_template_runtime::{
-    AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, Signature, SudoConfig,
-    SystemConfig, WASM_BINARY,
+    AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, Signature,
+    StorageMinerConfig, SudoConfig, SystemConfig, WASM_BINARY,
 };
 use sc_service::ChainType;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -155,6 +155,9 @@ fn testnet_genesis(
                 .iter()
                 .map(|x| (x.1.clone(), 1))
                 .collect(),
+        }),
+        pallet_storage_miner: Some(StorageMinerConfig {
+            ow_account_id: get_account_id_from_seed::<sr25519::Public>("Alice"),
         }),
         pallet_sudo: Some(SudoConfig {
             // Assign network admin rights.

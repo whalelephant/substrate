@@ -4242,8 +4242,8 @@ dependencies = [
  "pallet-aura",
  "pallet-balances",
  "pallet-grandpa",
- "pallet-mugwort-ipfs",
  "pallet-randomness-collective-flip",
+ "pallet-storage-miner",
  "pallet-sudo",
  "pallet-template",
  "pallet-timestamp",
@@ -4905,20 +4905,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-mugwort-ipfs"
-version = "0.1.0"
-dependencies = [
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-multisig"
 version = "2.0.0"
 dependencies = [
@@ -5201,6 +5187,20 @@ dependencies = [
  "quote",
  "sp-runtime",
  "syn",
+]
+
+[[package]]
+name = "pallet-storage-miner"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
