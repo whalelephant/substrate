@@ -80,6 +80,7 @@ std = [
 	"frame-system/std",
 	"frame-system-rpc-runtime-api/std",
 	"template/std",
+	"pallet-mugwort-ipfs/std"
 ]
 runtime-benchmarks = [
 	"sp-runtime/runtime-benchmarks",

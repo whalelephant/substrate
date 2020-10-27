@@ -1,18 +1,74 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
 use codec::{Decode, Encode};
 use frame_support::{debug, decl_error, decl_event, decl_module, decl_storage, weights::Weight};
 use frame_system::{
     self as system, ensure_signed,
-    offchain::{SendTransactionTypes, SubmitTransaction},
+    offchain::{
+        AppCrypto, CreateSignedTransaction, SendSignedTransaction, SignedPayload, Signer,
+        SigningTypes,
+    },
 };
-use sp_core::offchain::{Duration, IpfsRequest, IpfsResponse, Timestamp};
+use sp_core::{
+    crypto::KeyTypeId,
+    offchain::{Duration, IpfsRequest, IpfsResponse, Timestamp},
+};
 use sp_io::offchain::timestamp;
-use sp_runtime::offchain::ipfs;
-use sp_std::{str, vec::Vec};
+use sp_runtime::{offchain::ipfs, RuntimeDebug};
+use sp_std::{prelude::*, str, vec::Vec};
+
+/// Defines application identifier for crypto keys of this module.
+///
+/// Every module that deals with signatures needs to declare its unique identifier for
+/// its crypto keys.
+/// When an offchain worker is signing transactions it's going to request keys from type
+/// `KeyTypeId` via the keystore to sign the transaction.
+/// The keys can be inserted manually via RPC (see `author_insertKey`).
+pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"demo");
+/// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrapper.
+/// We can utilize the supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
+/// them with the pallet-specific identifier.
+pub mod crypto {
+    use crate::KEY_TYPE;
+    use sp_core::sr25519::Signature as Sr25519Signature;
+    use sp_runtime::app_crypto::{app_crypto, sr25519};
+    use sp_runtime::{traits::Verify, MultiSignature, MultiSigner};
+
+    app_crypto!(sr25519, KEY_TYPE);
+
+    pub struct TestAuthId;
+    // implemented for ocw-runtime
+    impl frame_system::offchain::AppCrypto<MultiSigner, MultiSignature> for TestAuthId {
+        type RuntimeAppPublic = Public;
+        type GenericSignature = sp_core::sr25519::Signature;
+        type GenericPublic = sp_core::sr25519::Public;
+    }
+
+    // implemented for mock runtime in test
+    impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
+        for TestAuthId
+    {
+        type RuntimeAppPublic = Public;
+        type GenericSignature = sp_core::sr25519::Signature;
+        type GenericPublic = sp_core::sr25519::Public;
+    }
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct Payload<Public> {
+    number: u64,
+    public: Public,
+}
+
+impl<T: SigningTypes> SignedPayload<T> for Payload<T::Public> {
+    fn public(&self) -> T::Public {
+        self.public.clone()
+    }
+}
 
 /// The pallet's configuration trait.
-pub trait Trait: system::Trait + SendTransactionTypes<Call<Self>> {
+pub trait Trait: system::Trait + CreateSignedTransaction<Call<Self>> {
+    /// The identifier type for an offchain worker.
+    type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
     /// The overarching event type.
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
     /// The overarching dispatch call type.
@@ -69,6 +125,8 @@ decl_error! {
         CantCreateRequest,
         RequestTimeout,
         RequestFailed,
+        OffchainSignedTxError,
+        OffchainSignerError
     }
 }
 
@@ -105,8 +163,7 @@ decl_module! {
         /// Offchain worker returns the cid
         #[weight = 200_000]
         fn transfigure_art(origin, id: u64, cid: Vec<u8>) {
-            // WIP: Used for signed transactions
-            //let who = ensure_signed(origin)?;
+            let _who = ensure_signed(origin)?;
             //ensure!{
             //    who == Self::ow_account_id(),
             //    Error::<T>::InvalidOW
@@ -179,8 +236,7 @@ impl<T: Trait> Module<T> {
                                 str::from_utf8(&cid)
                                     .expect("our own IPFS node can be trusted here; qed")
                             );
-
-                            match Self::transfigure_with_cid(art_id, data) {
+                            match Self::transfigure_with_cid(art_id, cid) {
                                 Ok(_) => debug::info!("ipfs returned cid for art_id: {}", art_id),
                                 Err(e) => {
                                     debug::error!("IPFS: add error for art_id {}: {:?}", art_id, e)
@@ -219,33 +275,26 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    fn transfigure_with_cid(id: u64, cid: Vec<u8>) -> Result<(), &'static str> {
-        // WIP: Using unsigned transactions for now
-        // let signer = Signer::<T, T::AuthorityId>::all_accounts();
-        // if !signer.can_sign() {
-        //     return Err(
-        //         "No local accounts available. Consider adding one via `author_insertKey` RPC.",
-        //     )?;
-        // }
+    fn transfigure_with_cid(id: u64, cid: Vec<u8>) -> Result<(), Error<T>> {
+        // We retrieve a signer and check if it is valid.
+        //   Since this pallet only has one key in the keystore. We use `any_account()1 to
+        //   retrieve it. If there are multiple keys and we want to pinpoint it, `with_filter()` can be chained,
+        //   ref: https://substrate.dev/rustdocs/v2.0.0/frame_system/offchain/struct.Signer.html
+        let signer = Signer::<T, T::AuthorityId>::any_account();
 
-        // let results =
-        //     signer.send_signed_transaction(|_account| Call::transfigure_art(id, cid.clone()));
+        let result =
+            signer.send_signed_transaction(|_account| Call::transfigure_art(id, cid.clone()));
 
-        // for (acc, res) in &results {
-        //     match res {
-        //         Ok(()) => debug::info!("[{:?}] Transfigured art of id: {}", acc.id, id),
-        //         Err(e) => debug::error!(
-        //             "[{:?}] Failed to submit for transfiguration: {:?}",
-        //             acc.id,
-        //             e
-        //         ),
-        //     }
-        // }
-
-        let call = Call::transfigure_art(id, cid);
-        //(offchain call) Error submitting a transaction to the pool: Pool(UnknownTransaction(UnknownTransaction::NoUnsignedValidator))
-        SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
-            .map_err(|()| "Unable to submit unsigned transaction.")?;
-        Ok(())
+        if let Some((_, res)) = result {
+            if res.is_err() {
+                debug::error!("signed tx error {:?}", res);
+                return Err(Error::<T>::OffchainSignedTxError);
+            }
+            return Ok(());
+        } else {
+            // The case of `None`: no account is available for sending
+            debug::error!("No local account available");
+            return Err(<Error<T>>::OffchainSignerError);
+        };
     }
 }
