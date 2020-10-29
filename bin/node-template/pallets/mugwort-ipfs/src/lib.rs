@@ -1,104 +1,64 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use codec::{Decode, Encode};
-use frame_support::{debug, decl_error, decl_event, decl_module, decl_storage, weights::Weight};
+use frame_support::{
+    debug, decl_error, decl_event, decl_module, decl_storage, ensure, weights::Weight,
+};
 use frame_system::{
     self as system, ensure_signed,
-    offchain::{
-        AppCrypto, CreateSignedTransaction, SendSignedTransaction, SignedPayload, Signer,
-        SigningTypes,
-    },
+    offchain::{CreateSignedTransaction, SendSignedTransaction, Signer},
 };
-use sp_core::{
-    crypto::KeyTypeId,
-    offchain::{Duration, IpfsRequest, IpfsResponse, Timestamp},
-};
+use sp_core::offchain::{Duration, IpfsRequest, IpfsResponse, Timestamp};
 use sp_io::offchain::timestamp;
-use sp_runtime::{offchain::ipfs, RuntimeDebug};
+use sp_runtime::offchain::ipfs;
 use sp_std::{prelude::*, str, vec::Vec};
 
-/// Defines application identifier for crypto keys of this module.
-///
-/// Every module that deals with signatures needs to declare its unique identifier for
-/// its crypto keys.
-/// When an offchain worker is signing transactions it's going to request keys from type
-/// `KeyTypeId` via the keystore to sign the transaction.
-/// The keys can be inserted manually via RPC (see `author_insertKey`).
-pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"demo");
-/// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrapper.
-/// We can utilize the supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
-/// them with the pallet-specific identifier.
-pub mod crypto {
-    use crate::KEY_TYPE;
-    use sp_core::sr25519::Signature as Sr25519Signature;
-    use sp_runtime::app_crypto::{app_crypto, sr25519};
-    use sp_runtime::{traits::Verify, MultiSignature, MultiSigner};
-
-    app_crypto!(sr25519, KEY_TYPE);
-
-    pub struct TestAuthId;
-    // implemented for ocw-runtime
-    impl frame_system::offchain::AppCrypto<MultiSigner, MultiSignature> for TestAuthId {
-        type RuntimeAppPublic = Public;
-        type GenericSignature = sp_core::sr25519::Signature;
-        type GenericPublic = sp_core::sr25519::Public;
-    }
-
-    // implemented for mock runtime in test
-    impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
-        for TestAuthId
-    {
-        type RuntimeAppPublic = Public;
-        type GenericSignature = sp_core::sr25519::Signature;
-        type GenericPublic = sp_core::sr25519::Public;
-    }
-}
-
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct Payload<Public> {
-    number: u64,
-    public: Public,
-}
-
-impl<T: SigningTypes> SignedPayload<T> for Payload<T::Public> {
-    fn public(&self) -> T::Public {
-        self.public.clone()
-    }
-}
+/// Pallet's key pair and signing algo
+pub mod crypto;
 
 /// The pallet's configuration trait.
 pub trait Trait: system::Trait + CreateSignedTransaction<Call<Self>> {
     /// The identifier type for an offchain worker.
-    type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
+    type AuthorityId: crypto::AppCrypto<Self::Public, Self::Signature>;
     /// The overarching event type.
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
     /// The overarching dispatch call type.
     type Call: From<Call<Self>>;
 }
 
-#[derive(Default, Encode, Decode, PartialEq)]
-pub struct ConjurationState<AccountId> {
-    owner: AccountId,
-    metadata: Vec<u8>,
+#[derive(Encode, Decode, PartialEq)]
+pub enum State<AccountId> {
+    SpellCast(AccountId),
+    ConjuredArt { owner: AccountId, metadata: Vec<u8> },
+}
+
+#[derive(Encode, Decode, PartialEq)]
+pub struct Conjuration<AccountId>(State<AccountId>);
+
+impl<A: Default> Default for Conjuration<A> {
+    fn default() -> Self {
+        Conjuration(State::SpellCast(A::default()))
+    }
 }
 
 #[derive(Encode, Decode, PartialEq)]
 enum DataCommand {
     AddBytes(u64, Vec<u8>),
+    CatBytes(Vec<u8>),
 }
 
 // This pallet's storage items.
 decl_storage! {
     trait Store for Module<T: Trait> as MugwortIpfs {
-        // WIP: Offchain_worker id - Used for signing transactions and ensuring only some keys are
-        // allowed.
-        // OWAccountId get(fn ow_account_id) build(|config: &GenesisConfig<T>| config.ow_account_id.clone()) : <T as system::Trait>::AccountId;
+        // WIP: This is whitelisting a single account
+        OWAccountId get(fn ow_account_id) build(|config: &GenesisConfig<T>| config.ow_account_id.clone()): <T as system::Trait>::AccountId;
         // Counter for Art work
-        CurrentArtId get(fn current_art_id): u64;
+        pub CurrentArtId get(fn current_art_id): u64;
         // A map for the conjured art states
-        Artwork get(fn art_work): map hasher(blake2_128_concat) u64 => ConjurationState<<T as
+        // Will be replaced by NFT map
+        pub Artwork get(fn art_work): map hasher(blake2_128_concat) u64 => Conjuration<<T as
                                   system::Trait>::AccountId>;
         // A Queue to handle Ipfs data requests
-        DataQueue: Vec<DataCommand>;
+        pub DataQueue: Vec<DataCommand>;
     }
     add_extra_genesis {
         config(ow_account_id): T::AccountId;
@@ -140,7 +100,7 @@ decl_module! {
         // Initializing events
         fn deposit_event() = default;
 
-        // needs to be synchronized with offchain_worker actitivies
+        // needs to be synchronized with offchain_worker actitivies on each block
         fn on_initialize(block_number: T::BlockNumber) -> Weight {
             DataQueue::kill();
             0
@@ -152,24 +112,32 @@ decl_module! {
             let who = ensure_signed(origin)?;
             let new_id = Self::current_art_id().checked_add(1).ok_or(Error::<T>::Overflow)?;
             CurrentArtId::put(new_id);
-            Artwork::<T>::insert(new_id, ConjurationState::<T::AccountId>{
+            Artwork::<T>::insert(new_id, Conjuration::<T::AccountId>(State::ConjuredArt{
                 owner: who.clone(),
                 metadata: Vec::new(),
-            });
+            }));
             DataQueue::mutate(|q| q.push(DataCommand::AddBytes(new_id, data)));
             Self::deposit_event(RawEvent::SpellCast(who));
         }
 
-        /// Offchain worker returns the cid
+        /// Offchain worker returns the cid and pinned
         #[weight = 200_000]
         fn transfigure_art(origin, id: u64, cid: Vec<u8>) {
-            let _who = ensure_signed(origin)?;
-            //ensure!{
-            //    who == Self::ow_account_id(),
-            //    Error::<T>::InvalidOW
-            //}
+            let who = ensure_signed(origin)?;
+            ensure!{
+                who == Self::ow_account_id(),
+                Error::<T>::InvalidOW
+            }
             Artwork::<T>::mutate(id, |art_work| {
-                art_work.metadata = cid.clone();
+                if let Conjuration(State::SpellCast(account_id)) =  art_work {
+                         *art_work = Conjuration(State::ConjuredArt{
+                            owner: account_id.clone(),
+                            metadata: cid.clone()
+                        })
+                } else {
+                    debug::error!("Artwork {} already conjured", id);
+                }
+
             });
             Self::deposit_event(RawEvent::Conjured( id, cid));
         }
@@ -236,6 +204,7 @@ impl<T: Trait> Module<T> {
                                 str::from_utf8(&cid)
                                     .expect("our own IPFS node can be trusted here; qed")
                             );
+                            // To pin bytes here as well
                             match Self::transfigure_with_cid(art_id, cid) {
                                 Ok(_) => debug::info!("ipfs returned cid for art_id: {}", art_id),
                                 Err(e) => {
@@ -246,12 +215,15 @@ impl<T: Trait> Module<T> {
                         Ok(_) => unreachable!(
                             "only AddBytes can be a response for that request type; qed"
                         ),
-                        Err(e) => debug::error!("IPFS: add error: {:?}", e),
+                        Err(e) => {
+                            // should return some fund to initiator
+                            debug::error!("IPFS: add error: {:?}", e)
+                        }
                     }
                 }
+                _ => {}
             }
         }
-
         Ok(())
     }
 
