@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Encode, Decode};
-use frame_support::{debug, decl_module, decl_storage, decl_event, decl_error, weights::Weight};
+use codec::{Decode, Encode};
+use frame_support::{debug, decl_error, decl_event, decl_module, decl_storage, weights::Weight};
 use frame_system::{self as system, ensure_signed};
 use sp_core::offchain::{Duration, IpfsRequest, IpfsResponse, OpaqueMultiaddr, Timestamp};
 use sp_io::offchain::timestamp;
@@ -49,7 +49,10 @@ decl_storage! {
 
 // The pallet's events
 decl_event!(
-    pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
+    pub enum Event<T>
+    where
+        AccountId = <T as system::Trait>::AccountId,
+    {
         ConnectionRequested(AccountId),
         DisconnectRequested(AccountId),
         QueuedDataToAdd(AccountId),
@@ -211,9 +214,14 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
     // send a request to the local IPFS node; can only be called be an off-chain worker
-    fn ipfs_request(req: IpfsRequest, deadline: impl Into<Option<Timestamp>>) -> Result<IpfsResponse, Error<T>> {
-        let ipfs_request = ipfs::PendingRequest::new(req).map_err(|_| Error::<T>::CantCreateRequest)?;
-        ipfs_request.try_wait(deadline)
+    fn ipfs_request(
+        req: IpfsRequest,
+        deadline: impl Into<Option<Timestamp>>,
+    ) -> Result<IpfsResponse, Error<T>> {
+        let ipfs_request =
+            ipfs::PendingRequest::new(req).map_err(|_| Error::<T>::CantCreateRequest)?;
+        ipfs_request
+            .try_wait(deadline)
             .map_err(|_| Error::<T>::RequestTimeout)?
             .map(|r| r.response)
             .map_err(|e| {
@@ -239,10 +247,13 @@ impl<T: Trait> Module<T> {
                         Ok(IpfsResponse::Success) => {
                             debug::info!(
                                 "IPFS: connected to {}",
-                                str::from_utf8(&addr.0).expect("our own calls can be trusted to be UTF-8; qed")
+                                str::from_utf8(&addr.0)
+                                    .expect("our own calls can be trusted to be UTF-8; qed")
                             );
                         }
-                        Ok(_) => unreachable!("only Success can be a response for that request type; qed"),
+                        Ok(_) => unreachable!(
+                            "only Success can be a response for that request type; qed"
+                        ),
                         Err(e) => debug::error!("IPFS: connect error: {:?}", e),
                     }
                 }
@@ -252,10 +263,13 @@ impl<T: Trait> Module<T> {
                         Ok(IpfsResponse::Success) => {
                             debug::info!(
                                 "IPFS: disconnected from {}",
-                                str::from_utf8(&addr.0).expect("our own calls can be trusted to be UTF-8; qed")
+                                str::from_utf8(&addr.0)
+                                    .expect("our own calls can be trusted to be UTF-8; qed")
                             );
                         }
-                        Ok(_) => unreachable!("only Success can be a response for that request type; qed"),
+                        Ok(_) => unreachable!(
+                            "only Success can be a response for that request type; qed"
+                        ),
                         Err(e) => debug::error!("IPFS: disconnect error: {:?}", e),
                     }
                 }
@@ -278,14 +292,19 @@ impl<T: Trait> Module<T> {
                         Ok(IpfsResponse::FindPeer(addrs)) => {
                             debug::info!(
                                 "IPFS: found the following addresses of {}: {:?}",
-                                str::from_utf8(&peer_id).expect("our own calls can be trusted to be UTF-8; qed"),
-                                addrs.iter()
-                                    .map(|addr| str::from_utf8(&addr.0)
-                                        .expect("our node's results can be trusted to be UTF-8; qed"))
+                                str::from_utf8(&peer_id)
+                                    .expect("our own calls can be trusted to be UTF-8; qed"),
+                                addrs
+                                    .iter()
+                                    .map(|addr| str::from_utf8(&addr.0).expect(
+                                        "our node's results can be trusted to be UTF-8; qed"
+                                    ))
                                     .collect::<Vec<_>>()
                             );
                         }
-                        Ok(_) => unreachable!("only FindPeer can be a response for that request type; qed"),
+                        Ok(_) => unreachable!(
+                            "only FindPeer can be a response for that request type; qed"
+                        ),
                         Err(e) => debug::error!("IPFS: find peer error: {:?}", e),
                     }
                 }
@@ -295,14 +314,19 @@ impl<T: Trait> Module<T> {
                         Ok(IpfsResponse::GetProviders(peer_ids)) => {
                             debug::info!(
                                 "IPFS: found the following providers of {}: {:?}",
-                                str::from_utf8(&cid).expect("our own calls can be trusted to be UTF-8; qed"),
-                                peer_ids.iter()
-                                    .map(|peer_id| str::from_utf8(&peer_id)
-                                        .expect("our node's results can be trusted to be UTF-8; qed"))
+                                str::from_utf8(&cid)
+                                    .expect("our own calls can be trusted to be UTF-8; qed"),
+                                peer_ids
+                                    .iter()
+                                    .map(|peer_id| str::from_utf8(&peer_id).expect(
+                                        "our node's results can be trusted to be UTF-8; qed"
+                                    ))
                                     .collect::<Vec<_>>()
                             );
                         }
-                        Ok(_) => unreachable!("only GetProviders can be a response for that request type; qed"),
+                        Ok(_) => unreachable!(
+                            "only GetProviders can be a response for that request type; qed"
+                        ),
                         Err(e) => debug::error!("IPFS: find providers error: {:?}", e),
                     }
                 }
@@ -316,7 +340,11 @@ impl<T: Trait> Module<T> {
         let data_queue = DataQueue::get();
         let len = data_queue.len();
         if len != 0 {
-            debug::info!("IPFS: {} entr{} in the data queue", len, if len == 1 { "y" } else { "ies" });
+            debug::info!(
+                "IPFS: {} entr{} in the data queue",
+                len,
+                if len == 1 { "y" } else { "ies" }
+            );
         }
 
         let deadline = Some(timestamp().add(Duration::from_millis(1_000)));
@@ -327,10 +355,13 @@ impl<T: Trait> Module<T> {
                         Ok(IpfsResponse::AddBytes(cid)) => {
                             debug::info!(
                                 "IPFS: added data with Cid {}",
-                                str::from_utf8(&cid).expect("our own IPFS node can be trusted here; qed")
+                                str::from_utf8(&cid)
+                                    .expect("our own IPFS node can be trusted here; qed")
                             );
-                        },
-                        Ok(_) => unreachable!("only AddBytes can be a response for that request type; qed"),
+                        }
+                        Ok(_) => unreachable!(
+                            "only AddBytes can be a response for that request type; qed"
+                        ),
                         Err(e) => debug::error!("IPFS: add error: {:?}", e),
                     }
                 }
@@ -342,8 +373,10 @@ impl<T: Trait> Module<T> {
                             } else {
                                 debug::info!("IPFS: got data: {:x?}", data);
                             };
-                        },
-                        Ok(_) => unreachable!("only CatBytes can be a response for that request type; qed"),
+                        }
+                        Ok(_) => unreachable!(
+                            "only CatBytes can be a response for that request type; qed"
+                        ),
                         Err(e) => debug::error!("IPFS: error: {:?}", e),
                     }
                 }
@@ -352,10 +385,13 @@ impl<T: Trait> Module<T> {
                         Ok(IpfsResponse::RemoveBlock(cid)) => {
                             debug::info!(
                                 "IPFS: removed a block with Cid {}",
-                                str::from_utf8(&cid).expect("our own IPFS node can be trusted here; qed")
+                                str::from_utf8(&cid)
+                                    .expect("our own IPFS node can be trusted here; qed")
                             );
-                        },
-                        Ok(_) => unreachable!("only RemoveBlock can be a response for that request type; qed"),
+                        }
+                        Ok(_) => unreachable!(
+                            "only RemoveBlock can be a response for that request type; qed"
+                        ),
                         Err(e) => debug::error!("IPFS: remove block error: {:?}", e),
                     }
                 }
@@ -364,10 +400,13 @@ impl<T: Trait> Module<T> {
                         Ok(IpfsResponse::Success) => {
                             debug::info!(
                                 "IPFS: pinned data with Cid {}",
-                                str::from_utf8(&cid).expect("our own request can be trusted to be UTF-8; qed")
+                                str::from_utf8(&cid)
+                                    .expect("our own request can be trusted to be UTF-8; qed")
                             );
-                        },
-                        Ok(_) => unreachable!("only Success can be a response for that request type; qed"),
+                        }
+                        Ok(_) => unreachable!(
+                            "only Success can be a response for that request type; qed"
+                        ),
                         Err(e) => debug::error!("IPFS: insert pin error: {:?}", e),
                     }
                 }
@@ -376,10 +415,13 @@ impl<T: Trait> Module<T> {
                         Ok(IpfsResponse::Success) => {
                             debug::info!(
                                 "IPFS: unpinned data with Cid {}",
-                                str::from_utf8(&cid).expect("our own request can be trusted to be UTF-8; qed")
+                                str::from_utf8(&cid)
+                                    .expect("our own request can be trusted to be UTF-8; qed")
                             );
-                        },
-                        Ok(_) => unreachable!("only Success can be a response for that request type; qed"),
+                        }
+                        Ok(_) => unreachable!(
+                            "only Success can be a response for that request type; qed"
+                        ),
                         Err(e) => debug::error!("IPFS: remove pin error: {:?}", e),
                     }
                 }
@@ -392,11 +434,12 @@ impl<T: Trait> Module<T> {
     fn print_metadata() -> Result<(), Error<T>> {
         let deadline = Some(timestamp().add(Duration::from_millis(200)));
 
-        let peers = if let IpfsResponse::Peers(peers) = Self::ipfs_request(IpfsRequest::Peers, deadline)? {
-            peers
-        } else {
-            unreachable!("only Peers can be a response for that request type; qed");
-        };
+        let peers =
+            if let IpfsResponse::Peers(peers) = Self::ipfs_request(IpfsRequest::Peers, deadline)? {
+                peers
+            } else {
+                unreachable!("only Peers can be a response for that request type; qed");
+            };
         let peer_count = peers.len();
 
         debug::info!(

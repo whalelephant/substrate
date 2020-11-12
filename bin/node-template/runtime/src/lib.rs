@@ -135,6 +135,8 @@ parameter_types! {
         .saturating_sub(Perbill::from_percent(10)) * MaximumBlockWeight::get();
     pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
     pub const Version: RuntimeVersion = VERSION;
+    pub const StorageFee: Balance = 200_000_000_000_000;
+    pub const RefundFee: Balance = 100_000_000_000_000;
 }
 
 // Configure FRAME pallets to include in runtime.
@@ -277,6 +279,8 @@ impl pallet_storage_miner::Trait for Runtime {
     type Event = Event;
     type Call = Call;
     type Currency = Balances;
+    type StorageFee = StorageFee;
+    type RefundFee = RefundFee;
 }
 
 // ----------------------- offchain worker signing config -----------------------------
