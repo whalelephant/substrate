@@ -46,6 +46,9 @@ default-features = false
 version = "2.0.0-rc6"
 path = "../../../../primitives/std"
 
+[dev-dependencies]
+pallet-balances = { path = "../../../../frame/balances" }
+
 [features]
 default = ['std']
 std = [

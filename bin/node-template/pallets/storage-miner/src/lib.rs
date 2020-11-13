@@ -154,8 +154,8 @@ decl_module! {
 
         /// Offchain worker updates storage, pin, remove_pin, unavilable etc
         #[weight = 200_000]
-        fn update_storage(origin, initiator: Option<T::AccountId>, response: IpfsResponse, remark:
-            bool) {
+        fn update_storage(origin, initiator: Option<T::AccountId>, response: IpfsResponse,
+            timestamp: Timestamp, remark: bool) {
             let who = ensure_signed(origin)?;
             ensure!{
                 // This is temp way to only let ocw to update pinned
@@ -166,7 +166,7 @@ decl_module! {
                 IpfsResponse::AddBytes(ref cid) => {
                     Storage::<T>::insert(cid, Record::<T> {
                         initiator: initiator,
-                        avail: Some(timestamp())
+                        avail: Some(timestamp)
                     })
                 }
                 // using cid here as need key to update storage
@@ -174,14 +174,14 @@ decl_module! {
                     if Storage::<T>::contains_key(cid.clone()) {
                         Storage::<T>::mutate(cid, |record| {
                             if remark {
-                                record.avail = Some(timestamp());
+                                record.avail = Some(timestamp);
                             } else {
                                 record.avail = None;
                             }
                         })
                     }
                 }
-                _ =>{}
+                _ => {}
             }
             Self::deposit_event(RawEvent::StorageUpdated(response));
         }
@@ -192,13 +192,6 @@ decl_module! {
             // process Ipfs::{add, get} queues every block
             if let Err(e) = Self::handle_data_requests() {
                 debug::error!("STORAGE: Encountered an error while processing data requests: {:?}", e);
-            }
-
-            // display some stats every 5 blocks
-            if block_number % 5.into() == 0.into() {
-                if let Err(e) = Self::print_metadata() {
-                    debug::error!("STORAGE: Encountered an error while obtaining metadata: {:?}", e);
-                }
             }
         }
     }
@@ -243,6 +236,11 @@ impl<T: Trait> Module<T> {
                 DataCommand::AddBytes(initiator, data) => {
                     match Self::ipfs_request(IpfsRequest::AddBytes(data.clone()), deadline) {
                         Ok(IpfsResponse::AddBytes(cid)) => {
+                            debug::info!(
+                                "Added bytes with cid {}",
+                                str::from_utf8(&cid)
+                                    .expect("our own IPFS node can be trusted here; qed")
+                            );
                             match Self::ipfs_request(
                                 IpfsRequest::InsertPin(cid.clone(), false),
                                 deadline,
@@ -253,7 +251,14 @@ impl<T: Trait> Module<T> {
                                         IpfsResponse::AddBytes(cid.clone()),
                                         false,
                                     ) {
-                                        Ok(_) => debug::info!("STORAGE::pin for cid {:?}", cid),
+                                        Ok(_) => {
+                                            debug::info!(
+                                                "Pinned bytes with cid {}",
+                                                str::from_utf8(&cid).expect(
+                                                    "our own IPFS node can be trusted here; qed"
+                                                )
+                                            );
+                                        }
                                         Err(e) => {
                                             debug::error!("STORAGE::pin error: {:?}", e);
 
@@ -321,29 +326,8 @@ impl<T: Trait> Module<T> {
                         }
                     }
                 }
-                _ => {}
             }
         }
-        Ok(())
-    }
-
-    fn print_metadata() -> Result<(), Error<T>> {
-        let deadline = Some(timestamp().add(Duration::from_millis(200)));
-
-        let peers =
-            if let IpfsResponse::Peers(peers) = Self::ipfs_request(IpfsRequest::Peers, deadline)? {
-                peers
-            } else {
-                unreachable!("only Peers can be a response for that request type; qed");
-            };
-        let peer_count = peers.len();
-
-        debug::info!(
-            "STORAGE: currently connected to {} peer{}",
-            peer_count,
-            if peer_count == 1 { "" } else { "s" },
-        );
-
         Ok(())
     }
 
@@ -359,7 +343,7 @@ impl<T: Trait> Module<T> {
         let signer = Signer::<T, T::AuthorityId>::any_account();
 
         let result = signer.send_signed_transaction(|_account| {
-            Call::update_storage(initiator.clone(), response.clone(), remark)
+            Call::update_storage(initiator.clone(), response.clone(), timestamp(), remark)
         });
 
         if let Some((_, res)) = result {
