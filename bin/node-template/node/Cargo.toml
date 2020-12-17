@@ -16,6 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 name = "node-template"
 
 [dependencies]
+futures = "0.3.4"
 structopt = "0.3.8"
 
 sc-cli = { version = "0.8.0", path = "../../../client/cli", features = ["wasmtime"] }
@@ -23,14 +24,18 @@ sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sc-executor = { version = "0.8.0", path = "../../../client/executor", features = ["wasmtime"] }
 sc-service = { version = "0.8.0", path = "../../../client/service", features = ["wasmtime"] }
 sc-keystore = { version = "2.0.0", path = "../../../client/keystore" }
+sc-network = { version = "0.8.0", path = "../../../client/network" }
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
 sc-transaction-pool = { version = "2.0.0", path = "../../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
-sc-consensus-aura = { version = "0.8.0", path = "../../../client/consensus/aura" }
-sp-consensus-aura = { version = "0.8.0", path = "../../../primitives/consensus/aura" }
 sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
+sp-consensus-babe = { version = "0.8.0", path = "../../../primitives/consensus/babe" }
+sc-consensus-babe = { version = "0.8.0", path = "../../../client/consensus/babe" }
+sc-consensus-slots = { version = "0.8.0", path = "../../../client/consensus/slots" }
 sc-consensus = { version = "0.8.0", path = "../../../client/consensus/common" }
 sc-finality-grandpa = { version = "0.8.0", path = "../../../client/finality-grandpa" }
+sc-authority-discovery= { version = "0.8.0", path = "../../../client/authority-discovery" }
+sp-authority-discovery= { version = "2.0.0", path = "../../../primitives/authority-discovery" }
 sp-finality-grandpa = { version = "2.0.0", path = "../../../primitives/finality-grandpa" }
 sc-client-api = { version = "2.0.0", path = "../../../client/api" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
@@ -45,7 +50,7 @@ sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builde
 sc-basic-authorship = { version = "0.8.0", path = "../../../client/basic-authorship" }
 substrate-frame-rpc-system = { version = "2.0.0", path = "../../../utils/frame/rpc/system" }
 pallet-transaction-payment-rpc = { version = "2.0.0", path = "../../../frame/transaction-payment/rpc/" }
-
+pallet-im-online = { version = "2.0.0", path = "../../../frame/im-online/" }
 # These dependencies are used for runtime benchmarking
 frame-benchmarking = { version = "2.0.0", path = "../../../frame/benchmarking" }
 frame-benchmarking-cli = { version = "2.0.0", path = "../../../utils/frame/benchmarking-cli" }
