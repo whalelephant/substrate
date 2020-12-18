@@ -267,8 +267,8 @@ parameter_types! {
 	pub const BountyValueMinimum: Balance = 5 * DOLLARS;
 }
 
-pub struct TenToFourteen;
-impl Contains<AccountId> for TenToFourteen {
+pub struct EmptyTippers;
+impl Contains<AccountId> for EmptyTippers {
 	fn sorted_members() -> Vec<AccountId> {
 		vec![]
 	}
@@ -276,7 +276,7 @@ impl Contains<AccountId> for TenToFourteen {
 	fn add(new: &AccountId) {}
 }
 
-impl ContainsLengthBound for TenToFourteen {
+impl ContainsLengthBound for EmptyTippers {
 	fn max_len() -> usize {
 		0
 	}
@@ -289,7 +289,7 @@ impl pallet_treasury::Config for Runtime {
 	type Currency = Balances;
 	type ApproveOrigin = frame_system::EnsureRoot<AccountId>;
 	type RejectOrigin = frame_system::EnsureRoot<AccountId>;
-	type Tippers = TenToFourteen;
+	type Tippers = EmptyTippers;
 	type TipCountdown = TipCountdown;
 	type TipFindersFee = TipFindersFee;
 	type TipReportDepositBase = TipReportDepositBase;
@@ -428,6 +428,7 @@ where
 	type Extrinsic = UncheckedExtrinsic;
 	type OverarchingCall = Call;
 }
+
 impl pallet_im_online::Config for Runtime {
 	type AuthorityId = ImOnlineId;
 	type Event = Event;
